@@ -13,7 +13,7 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- StPageFlip Library for realistic 3D page animations -->
+  <!-- StPageFlip Library CDN with fallback detection -->
   <script src="https://cdn.jsdelivr.net/npm/page-flip@0.7.8/dist/js/page-flip.browser.js"></script>
 
   <style>
@@ -44,7 +44,6 @@
       overflow-x: hidden;
     }
 
-    /* Traditional Ornamental Header */
     header {
       width: 100%;
       text-align: center;
@@ -92,7 +91,6 @@
       font-weight: 600;
     }
 
-    /* Flipbook Main Stage */
     .stage {
       flex-grow: 1;
       display: flex;
@@ -107,21 +105,27 @@
       position: relative;
       box-shadow: 0 20px 40px rgba(0,0,0,0.8);
       border-radius: 4px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
     .page {
       background-color: var(--parchment-bg);
-      background-size: cover;
+      background-size: contain;
       background-position: center;
       background-repeat: no-repeat;
       border: 1px solid rgba(0,0,0,0.1);
+      overflow: hidden;
     }
 
-    .page.--portrait {
-      background-size: contain;
+    .page img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
     }
 
-    /* Control Toolbar */
     .controls {
       width: 100%;
       background: rgba(0, 0, 0, 0.5);
@@ -174,7 +178,6 @@
       text-align: center;
     }
 
-    /* Responsive Adjustments */
     @media (max-width: 768px) {
       .title-container h1 {
         font-size: 1.4rem;
@@ -187,14 +190,13 @@
         font-size: 0.85rem;
       }
       .btn span {
-        display: none; /* Hide text on mobile, keep icons */
+        display: none;
       }
     }
   </style>
 </head>
 <body>
 
-  <!-- Header Section -->
   <header>
     <div class="title-container">
       <h1>ঐতিহ্যের শতবর্ষ: দত্তবাড়ীর পুজো পার্বণ</h1>
@@ -207,16 +209,14 @@
     </div>
   </header>
 
-  <!-- Main Flipbook Container -->
   <main class="stage">
     <div class="flipbook-wrapper">
       <div id="flipbook">
-        <!-- JS dynamically generates all 56 pages with Page1.jpg to Page56.jpg -->
+        <!-- JS dynamically populates images Page1.jpg to Page56.jpg -->
       </div>
     </div>
   </main>
 
-  <!-- Bottom Navigation Controls -->
   <footer class="controls">
     <button class="btn" id="btnPrev">
       <i class="fa-solid fa-chevron-left"></i>
@@ -238,92 +238,114 @@
   </footer>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    (function() {
       const totalPagesCount = 56;
+      const filePrefix = 'Page';
+      const fileExtension = '.jpg';
+      
       const flipbookContainer = document.getElementById('flipbook');
       const currentPageEl = document.getElementById('currentPage');
 
-      // Convert English Numbers to Bengali Numbers
+      // Bengali Numeral Helper
       function toBengaliNumerals(num) {
         const bnNums = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
         return num.toString().split('').map(d => bnNums[d] || d).join('');
       }
 
-      // Generate all 56 pages dynamically
-      // Assumes images are named: Page1.jpg, Page2.jpg ... Page56.jpg
       for (let i = 1; i <= totalPagesCount; i++) {
         const pageDiv = document.createElement('div');
         pageDiv.className = 'page';
-        pageDiv.style.backgroundImage = `url('Page${i}.jpg')`;
+        
+        const img = document.createElement('img');
+        img.src = `${filePrefix}${i}${fileExtension}`;
+        img.alt = `পাতা ${i}`;
+        img.onerror = function() {
+          // Fallback if image path case differs
+          if (this.src.includes('Page')) {
+            this.src = `page${i}${fileExtension}`;
+          }
+        };
+
+        pageDiv.appendChild(img);
         flipbookContainer.appendChild(pageDiv);
       }
 
-      // Calculate initial dimensions based on viewport
-      let bookWidth = Math.min(window.innerWidth * 0.42, 480);
-      let bookHeight = bookWidth * 1.41; // A4 aspect ratio
+      function initFlipBook() {
+        // Resolve PageFlip constructor class from global scope safely
+        const PageFlipClass = (window.St && window.St.PageFlip) || window.PageFlip || window.StPageFlip;
 
-      if (window.innerWidth < 768) {
-        bookWidth = Math.min(window.innerWidth * 0.88, 380);
-        bookHeight = bookWidth * 1.41;
+        if (!PageFlipClass) {
+          // If script tag hasn't loaded yet, retry shortly
+          setTimeout(initFlipBook, 100);
+          return;
+        }
+
+        // Calculate dynamic dimensions
+        let bookWidth = Math.min(window.innerWidth * 0.42, 480);
+        let bookHeight = bookWidth * 1.41;
+
+        if (window.innerWidth < 768) {
+          bookWidth = Math.min(window.innerWidth * 0.88, 380);
+          bookHeight = bookWidth * 1.41;
+        }
+
+        try {
+          const pageFlip = new PageFlipClass(
+            flipbookContainer,
+            {
+              width: bookWidth,
+              height: bookHeight,
+              size: "fixed",
+              minWidth: 260,
+              maxWidth: 600,
+              minHeight: 360,
+              maxHeight: 850,
+              maxShadowOpacity: 0.6,
+              showCover: true,
+              mobileScrollSupport: false,
+              usePortrait: true
+            }
+          );
+
+          pageFlip.loadFromHTML(document.querySelectorAll('.page'));
+
+          pageFlip.on('flip', (e) => {
+            const current = e.data + 1;
+            currentPageEl.textContent = toBengaliNumerals(current);
+          });
+
+          document.getElementById('btnPrev').addEventListener('click', () => {
+            pageFlip.flipPrev();
+          });
+
+          document.getElementById('btnNext').addEventListener('click', () => {
+            pageFlip.flipNext();
+          });
+
+          document.getElementById('btnFullscreen').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+              document.exitFullscreen();
+            }
+          });
+
+          window.addEventListener('resize', () => {
+            pageFlip.updateFromHtml(document.querySelectorAll('.page'));
+          });
+
+        } catch (err) {
+          console.error("Flipbook initialization error:", err);
+        }
       }
 
-      // Initialize St.PageFlip
-      const pageFlip = new St.PageFlip(
-        document.getElementById('flipbook'),
-        {
-          width: bookWidth,
-          height: bookHeight,
-          size: "fixed",
-          minWidth: 260,
-          maxWidth: 600,
-          minHeight: 360,
-          maxHeight: 850,
-          maxShadowOpacity: 0.6,
-          showCover: true,
-          mobileScrollSupport: false,
-          usePortrait: true
-        }
-      );
-
-      // Load generated pages into St.PageFlip
-      pageFlip.loadFromHTML(document.querySelectorAll('.page'));
-
-      // Event Listener: Page Change
-      pageFlip.on('flip', (e) => {
-        const current = e.data + 1;
-        currentPageEl.textContent = toBengaliNumerals(current);
-      });
-
-      // Navigation Controls Binding
-      document.getElementById('btnPrev').addEventListener('click', () => {
-        pageFlip.flipPrev();
-      });
-
-      document.getElementById('btnNext').addEventListener('click', () => {
-        pageFlip.flipNext();
-      });
-
-      // Fullscreen Toggle
-      document.getElementById('btnFullscreen').addEventListener('click', () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(err => {
-            alert(`Error entering fullscreen: ${err.message}`);
-          });
-        } else {
-          document.exitFullscreen();
-        }
-      });
-
-      // Handle window resizing smoothly
-      window.addEventListener('resize', () => {
-        let newWidth = Math.min(window.innerWidth * 0.42, 480);
-        if (window.innerWidth < 768) {
-          newWidth = Math.min(window.innerWidth * 0.88, 380);
-        }
-        let newHeight = newWidth * 1.41;
-        pageFlip.updateFromHtml(document.querySelectorAll('.page'));
-      });
-    });
+      // Start initialization after window load
+      if (document.readyState === 'complete') {
+        initFlipBook();
+      } else {
+        window.addEventListener('load', initFlipBook);
+      }
+    })();
   </script>
 </body>
 </html>
